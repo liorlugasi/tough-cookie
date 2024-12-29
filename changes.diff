@@ -1,0 +1,126 @@
+diff --git a/lib/memstore.js b/lib/memstore.js
+index d2b915c..87fd462 100644
+--- a/lib/memstore.js
++++ b/lib/memstore.js
+@@ -36,7 +36,8 @@ var util = require('util');
+ 
+ function MemoryCookieStore() {
+   Store.call(this);
+-  this.idx = {};
++  //this.idx = {}; 
++  this.idx = Object.create(null); // To avoid inherited properties or methods from Object.prototype, which prevents malicious properties from being injected into the prototype chain.
+ }
+ util.inherits(MemoryCookieStore, Store);
+ exports.MemoryCookieStore = MemoryCookieStore;
+@@ -89,15 +90,15 @@ MemoryCookieStore.prototype.findCookies = function(domain, path, cb) {
+        //NOTE: we should use path-match algorithm from S5.1.4 here
+        //(see : https://github.com/ChromiumWebApps/chromium/blob/b3d3b4da8bb94c1b2e061600df106d590fda3620/net/cookies/canonical_cookie.cc#L299)
+        Object.keys(domainIndex).forEach(function (cookiePath) {
+-         if (pathMatch(path, cookiePath)) {
+-           var pathIndex = domainIndex[cookiePath];
++        if (pathMatch(path, cookiePath)) {
++          var pathIndex = domainIndex[cookiePath];
+ 
+            for (var key in pathIndex) {
+-             results.push(pathIndex[key]);
++            results.push(pathIndex[key]);
+            }
+-         }
+-       });
+-     };
++        }
++      });
++    };
+   }
+ 
+   var domains = permuteDomain(domain) || [domain];
+@@ -115,10 +116,12 @@ MemoryCookieStore.prototype.findCookies = function(domain, path, cb) {
+ 
+ MemoryCookieStore.prototype.putCookie = function(cookie, cb) {
+   if (!this.idx[cookie.domain]) {
+-    this.idx[cookie.domain] = {};
++    //this.idx[cookie.domain] = {};
++    this.idx[cookie.domain] = Object.create(null); // To avoid inherited properties or methods from Object.prototype, which prevents malicious properties from being injected into the prototype chain.
+   }
+   if (!this.idx[cookie.domain][cookie.path]) {
+-    this.idx[cookie.domain][cookie.path] = {};
++    //this.idx[cookie.domain][cookie.path] = {};
++    this.idx[cookie.domain][cookie.path] = Object.create(null); // To avoid inherited properties or methods from Object.prototype, which prevents malicious properties from being injected into the prototype chain.
+   }
+   this.idx[cookie.domain][cookie.path][cookie.key] = cookie;
+   cb(null);
+@@ -150,7 +153,8 @@ MemoryCookieStore.prototype.removeCookies = function(domain, path, cb) {
+ };
+ 
+ MemoryCookieStore.prototype.removeAllCookies = function(cb) {
+-  this.idx = {};
++  //this.idx = {};
++  this.idx = Object.create(null); // To avoid inherited properties or methods from Object.prototype, which prevents malicious properties from being injected into the prototype chain.
+   return cb(null);
+ }
+ 
+diff --git a/test/cookie_jar_test.js b/test/cookie_jar_test.js
+index 67809b9..d9c83b9 100644
+--- a/test/cookie_jar_test.js
++++ b/test/cookie_jar_test.js
+@@ -541,4 +541,29 @@ vows
+       }
+     }
+   })
++  .addBatch({
++    "Issue #282 - Prototype pollution": {
++      "when setting a cookie with the domain __proto__": {
++        topic: function() {
++          const jar = new tough.CookieJar(undefined, {
++            rejectPublicSuffixes: false
++          });
++          // try to pollute the prototype
++          jar.setCookieSync(
++            "Slonser=polluted; Domain=__proto__; Path=/notauth",
++            "https://__proto__/admin"
++          );
++          jar.setCookieSync(
++            "Auth=Lol; Domain=google.com; Path=/notauth",
++            "https://google.com/"
++          );
++          this.callback();
++        },
++        "results in a cookie that is not affected by the attempted prototype pollution": function() {
++          const pollutedObject = {};
++          assert(pollutedObject["/notauth"] === undefined);
++        }
++      }
++    }
++  })
+   .export(module);
+diff --git a/test/ietf_data/parser.json b/test/ietf_data/parser.json
+index c40ad54..9ee1850 100644
+--- a/test/ietf_data/parser.json
++++ b/test/ietf_data/parser.json
+@@ -11,7 +11,7 @@
+   {
+     "test": "0002",
+     "received": [
+-      "foo=bar; Expires=Fri, 07 Aug 2019 08:04:19 GMT"
++      "foo=bar; Expires=Fri, 07 Aug 9999 08:04:19 GMT"
+     ],
+     "sent": [
+       { "name": "foo", "value": "bar" }
+@@ -707,7 +707,7 @@
+   {
+     "test": "COMMA0006",
+     "received": [
+-      "foo=bar; Expires=Fri, 07 Aug 2019 08:04:19 GMT"
++      "foo=bar; Expires=Fri, 07 Aug 9999 08:04:19 GMT"
+     ],
+     "sent": [
+       { "name": "foo", "value": "bar" }
+@@ -716,7 +716,7 @@
+   {
+     "test": "COMMA0007",
+     "received": [
+-      "foo=bar; Expires=Fri 07 Aug 2019 08:04:19 GMT, baz=qux"
++      "foo=bar; Expires=Fri 07 Aug 9999 08:04:19 GMT, baz=qux"
+     ],
+     "sent": [
+       { "name": "foo", "value": "bar" }
